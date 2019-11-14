@@ -8,9 +8,11 @@
 
     using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Request;
     using Microsoft.TeamFoundation.DistributedTask.WebApi;
+    using Microsoft.VisualStudio.Services.WebApi;
 
     public class TaskLogger
     {
+        private const int RetryAttempts = 3
         private readonly TaskProperties taskProperties;
 
         private int byteCount;
@@ -43,13 +45,28 @@
             }
 
             var line = $"{DateTime.UtcNow:O} {message}";
-            await taskClient.AppendTimelineRecordFeedAsync(new List<string> { line }).ConfigureAwait(false);
-            await LogPage(line).ConfigureAwait(false);
+            HttpRetryHelper httpRetryHelper = new HttpRetryHelper(RetryAttempts);
+            await httpRetryHelper.Invoke(async () =>
+            {
+                await taskClient.AppendTimelineRecordFeedAsync(new List<string> { line }).ConfigureAwait(false);
+                await LogPage(line).ConfigureAwait(false);
+            });
         }
 
         public async Task End()
         {
-            await EndPage().ConfigureAwait(false);
+            try
+            {
+                HttpRetryHelper httpRetryHelper = new HttpRetryHelper(RetryAttempts);
+                await httpRetryHelper.Invoke(async () =>
+                {
+                    await EndPage().ConfigureAwait(false);
+                });
+            }
+            finally
+            {
+                Directory.Delete(pagesFolder, true);
+            }
         }
 
         //

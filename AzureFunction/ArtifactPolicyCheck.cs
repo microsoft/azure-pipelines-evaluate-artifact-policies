@@ -18,20 +18,21 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.Http;
     using Microsoft.Extensions.Logging;
+    using Microsoft.VisualStudio.Services.WebApi;
     using Newtonsoft.Json;
 
     using WebJobsExecutionContext = WebJobs.ExecutionContext;
 
-    public static class EvaluateOPA
+    public static class ArtifactPolicyCheck
     {
-        [FunctionName("EvaluateOPA")]
+        private const int NumberOfHttpRetries = 5;
+
+        [FunctionName("ArtifactPolicyCheck")]
         public async static Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)]HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)]HttpRequest req,
             ILogger log,
             WebJobsExecutionContext executionContext)
         {
-            await Task.CompletedTask;
-
             log.LogInformation("C# HTTP trigger function processed a request.");
 
             log.LogInformation("function directory: " + executionContext.FunctionDirectory);
@@ -40,7 +41,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             EvaluationRequest request;
             try
             {
-                string requestBody = new StreamReader(req.Body).ReadToEnd();
+                string requestBody = await new StreamReader(req.Body).ReadToEndAsync().ConfigureAwait(false);
                 request = JsonConvert.DeserializeObject<EvaluationRequest>(requestBody);
             }
             catch (Exception e)
@@ -66,24 +67,20 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             if (!string.IsNullOrWhiteSpace(request.AuthToken))
             {
                 TaskProperties taskProperties = Utilities.CreateTaskProperties(request);
-                Task.Factory.StartNew(async () => await ExecuteUsingTimelineLogs(
-                    executionContext,
-                    log,
-                    imageProvenance,
-                    request.PolicyData,
-                    request.CheckSuiteId,
-                    taskProperties));
+                new Thread(async () => await ExecuteUsingTimelineLogs(
+                  executionContext,
+                  log,
+                  imageProvenance,
+                  request.PolicyData,
+                  request.CheckSuiteId,
+                  taskProperties,
+                  request.Variables));
                 return new NoContentResult();
             }
             else
             {
                 string outputLog;
-                var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, request.PolicyData, null, out outputLog);
-                if (!string.IsNullOrWhiteSpace(outputLog))
-                {
-                    log.LogInformation(outputLog);
-                }
-
+                var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, request.PolicyData, null, request.Variables, out outputLog);
                 return new OkObjectResult(new EvaluationResponse { Violations = violations.ToList(), Logs = outputLog });
             }
         }
@@ -94,7 +91,8 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             string imageProvenance,
             string policy,
             Guid checkSuiteId,
-            TaskProperties taskProperties)
+            TaskProperties taskProperties,
+            IDictionary<string, string> variables)
         {
             using (var taskClient = new TaskClient(taskProperties))
             {
@@ -106,20 +104,23 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
 
                     // report task started
                     string taskStartedLog = string.Format("Initializing evaluation. Execution id - {0}", executionContext.InvocationId);
-                    log.LogInformation(taskStartedLog);
-                    await taskLogger.Log(taskStartedLog).ConfigureAwait(false);
+                    Utilities.LogInformation(taskStartedLog, log, taskLogger, variables);
 
                     string outputLog;
-                    var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, policy, taskLogger, out outputLog);
-                    bool succeeded = violations == null || !violations.Any();
+                    var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, policy, taskLogger, variables, out outputLog);
+                    bool succeeded = violations?.Any() == true;
+                    Utilities.LogInformation($"Policy check succeeded: {succeeded}", log, taskLogger, variables);
 
-                    var currentStatus = UpdateCheckSuiteResult(
+                    await UpdateCheckSuiteResult(
                         taskProperties.PlanUrl,
                         taskProperties.AuthToken,
                         taskProperties.ProjectId,
                         checkSuiteId,
                         succeeded,
-                        outputLog);
+                        outputLog,
+                        log,
+                        taskLogger,
+                        variables);
 
                     return;
                 }
@@ -142,13 +143,16 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             }
         }
 
-        private static string UpdateCheckSuiteResult(
+        private static async Task UpdateCheckSuiteResult(
             string accountUrl,
             string authToken,
             Guid projectId,
             Guid checkSuiteId,
             bool succeeded,
-            string message)
+            string message,
+            ILogger log,
+            TaskLogger taskLogger,
+            IDictionary<string, string> variables)
         {
             string currentStatus;
             using (var httpClient = new HttpClient())
@@ -157,8 +161,22 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                 string base64AuthString = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(authTokenString));
                 httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64AuthString);
 
-                var getResponse = httpClient.GetAsync(string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}", accountUrl, projectId, checkSuiteId)).Result;
-                string checkSuiteResult = getResponse.Content.ReadAsStringAsync().Result;
+                HttpRetryHelper httpRetryHelper = new HttpRetryHelper(NumberOfHttpRetries);
+                string checkSuiteResult = null;
+                try
+                {
+                    var checkRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}", accountUrl, projectId, checkSuiteId);
+                    Utilities.LogInformation(string.Format("Invoking {0} to get current check status", checkRunUrl), log, taskLogger, variables);
+                    var getResponse = await httpRetryHelper.Invoke(async () => await httpClient.GetAsync(checkRunUrl));
+                    checkSuiteResult = await getResponse.Content.ReadAsStringAsync();
+                    Utilities.LogInformation($"Check suite response: {checkSuiteResult}", log, taskLogger, variables);
+                }
+                catch (Exception e)
+                {
+                    await taskLogger?.Log($"Failed to fetch current check status with error message : {e.Message}");
+                    Utilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables);
+                }
+
                 dynamic checkSuite = JsonConvert.DeserializeObject(checkSuiteResult);
                 currentStatus = checkSuite?.status;
 
@@ -169,16 +187,23 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                     dynamic checkRunResult = new { status = succeeded ? "approved" : "rejected", resultMessage = message };
                     checkSuiteUpdate.Add(checkSuiteId.ToString(), checkRunResult);
 
-                    var updatedCheckSuiteBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(checkSuite));
-                    var updatedCheckByteContent = new ByteArrayContent(updatedCheckSuiteBuffer);
+                    try
+                    {
+                        var updatedCheckSuiteBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(checkSuite));
+                        var updatedCheckByteContent = new ByteArrayContent(updatedCheckSuiteBuffer);
 
-                    updatedCheckByteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                    var updateCheckSuiteResponse = httpClient.PostAsync(string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?_api-version=5.0", accountUrl, projectId, checkSuiteId), updatedCheckByteContent).Result;
-
+                        updatedCheckByteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                        var updateCheckRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?_api-version=5.0", accountUrl, projectId, checkSuiteId);
+                        Utilities.LogInformation(string.Format("Invoking {0} to post current check status", updateCheckRunUrl), log, taskLogger, variables);
+                        var updateCheckSuiteResponse = await httpRetryHelper.Invoke(async () => await httpClient.PostAsync(updateCheckRunUrl, updatedCheckByteContent));
+                    }
+                    catch (Exception e)
+                    {
+                        await taskLogger?.Log($"Failed to fetch update check status with error message : {e.Message}");
+                        Utilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables);
+                    }
                 }
             }
-
-            return currentStatus;
         }
     }
 }

@@ -56,7 +56,7 @@
                 ? ParseGuid(messageProperties, TaskInstanceIdKey)
                 : Guid.Empty;
 
-            this.HubName = "Release";
+            this.HubName = "Build";
             if (messageProperties.ContainsKey(HubNameKey))
             {
                 this.HubName = messageProperties[HubNameKey];
@@ -91,15 +91,15 @@
         private static Guid ParseGuid(IDictionary<string, string> messageProperties, string propertyName)
         {
             var messageProperty = messageProperties[propertyName];
-            if (!Guid.TryParse(messageProperty, out var projectId))
+            if (!Guid.TryParse(messageProperty, out var propertyGuidValue))
             {
                 throw new InvalidDataException($"Invalid guid value '{messageProperty}' provided for {propertyName}");
             }
 
-            return projectId;
+            return propertyGuidValue;
         }
 
-        private readonly List<string> validHubNameList = new List<string> { "Build", "Release", "Gates" };
+        private readonly List<string> validHubNameList = new List<string> { "Build", "Gates" };
         public const string ProjectIdKey = "ProjectId";
         public const string JobIdKey = "JobId";
         public const string PlanIdKey = "PlanId";

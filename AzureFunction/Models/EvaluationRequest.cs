@@ -1,6 +1,7 @@
 ﻿namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models
 {
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Runtime.Serialization;
 
@@ -36,5 +37,8 @@
 
         [DataMember(EmitDefaultValue = false)]
         public Guid TimelineId { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public IDictionary<string,string> Variables { get; set; }
     }
 }

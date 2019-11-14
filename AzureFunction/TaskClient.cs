@@ -53,44 +53,5 @@
             vssConnection = null;
             taskClient = null;
         }
-
-        private async Task<Guid> GetJobId(string hubName, Guid jobId, Guid taskId)
-        {
-            if (hubName.Equals("Gates", StringComparison.OrdinalIgnoreCase))
-            {
-                var planVersion = await GetPlanVersion();
-                if (planVersion <= 12)
-                {
-                    return taskId;
-                }
-            }
-
-            return jobId;
-        }
-
-        private async Task<Guid> GetTaskId(string hubName, Guid taskId)
-        {
-            if (hubName.Equals("Gates", StringComparison.OrdinalIgnoreCase))
-            {
-                var planVersion = await GetPlanVersion();
-                if (planVersion <= 12)
-                {
-                    return Guid.Empty;
-                }
-            }
-
-            return taskId;
-        }
-
-        private async Task<int> GetPlanVersion()
-        {
-            if (this.PlanVersion == null)
-            {
-                var plan = await taskClient.GetPlanAsync(taskProperties.ProjectId, taskProperties.HubName, taskProperties.PlanId);
-                PlanVersion = plan.Version;
-            }
-
-            return PlanVersion.Value;
-        }
     }
 }
