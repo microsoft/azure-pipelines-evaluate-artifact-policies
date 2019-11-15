@@ -120,7 +120,7 @@
 
                 // Create a new record and only set the Log field
                 var attachmentUpdataRecord = new TimelineRecord { Id = taskProperties.TaskInstanceId, Log = taskLog };
-                await taskClient.UpdateTimelineRecordsAsync(attachmentUpdataRecord, default(CancellationToken)).ConfigureAwait(false);
+                await taskClient.UpdateTimelineRecordAsync(attachmentUpdataRecord, default(CancellationToken)).ConfigureAwait(false);
             }
         }
 
@@ -145,7 +145,7 @@
             }
 
             // this is an upsert call
-            await taskClient.UpdateTimelineRecordsAsync(timelineRecord, cancellationToken).ConfigureAwait(false);
+            await taskClient.UpdateTimelineRecordAsync(timelineRecord, cancellationToken).ConfigureAwait(false);
         }
     }
 }

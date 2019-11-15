@@ -25,7 +25,7 @@
             taskClient = vssConnection.GetClient<TaskHttpClient>();
         }
 
-        public async Task UpdateTimelineRecordsAsync(TimelineRecord timelineRecord, CancellationToken cancellationToken)
+        public async Task UpdateTimelineRecordAsync(TimelineRecord timelineRecord, CancellationToken cancellationToken)
         {
             await taskClient.UpdateTimelineRecordsAsync(this.taskProperties.ProjectId, this.taskProperties.HubName, this.taskProperties.PlanId, this.taskProperties.TimelineId, new List<TimelineRecord> { timelineRecord }, cancellationToken).ConfigureAwait(false);
         }

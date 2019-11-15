@@ -49,11 +49,7 @@
                 ? ParseGuid(messageProperties, TaskInstanceIdKey)
                 : Guid.Empty;
 
-            this.HubName = "Build";
-            if (messageProperties.ContainsKey(HubNameKey))
-            {
-                this.HubName = messageProperties[HubNameKey];
-            }
+            this.HubName = messageProperties.ContainsKey(HubNameKey) ? messageProperties[HubNameKey] : "Build";
             if (!validHubNameList.Contains(this.HubName, StringComparer.OrdinalIgnoreCase))
             {
                 var exceptionMessage = $"Invalid hub name '{this.HubName}'. Please provide valid hub name from '{string.Join(", ", validHubNameList)}'.";
@@ -65,11 +61,7 @@
 
             this.AuthToken = messageProperties[AuthTokenKey];
 
-            var requestTypeString = RequestType.Execute.ToString();
-            if (messageProperties.ContainsKey(RequestTypeKey))
-            {
-                requestTypeString = messageProperties[RequestTypeKey];
-            }
+            var requestTypeString = messageProperties.ContainsKey(RequestTypeKey) ? messageProperties[RequestTypeKey] : RequestType.Execute.ToString();
             if (Enum.TryParse<RequestType>(requestTypeString, out var requestType))
             {
                 this.RequestType = requestType;
