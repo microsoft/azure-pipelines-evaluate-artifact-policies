@@ -38,14 +38,7 @@
 
         public TaskProperties(IDictionary<string, string> messageProperties)
         {
-            var missingProperties = MandatoryProperties
-                .Where(propertyToCheck => !messageProperties.ContainsKey(propertyToCheck)).ToList();
-            if (missingProperties.Any())
-            {
-                var exceptionMessage =
-                    $"Required properties '{string.Join(", ", missingProperties)}' are missing. Please provide these values and try again.";
-                throw new InvalidDataException(exceptionMessage);
-            }
+            ValidateProperties(messageProperties);
 
             this.ProjectId = ParseGuid(messageProperties, ProjectIdKey);
             this.JobId = ParseGuid(messageProperties, JobIdKey);
@@ -85,6 +78,23 @@
             if (messageProperties.ContainsKey(TaskInstanceNameKey))
             {
                 this.TaskInstanceName = messageProperties[TaskInstanceNameKey];
+            }
+        }
+
+        private static void ValidateProperties(IDictionary<string, string> messageProperties)
+        {
+            if (messageProperties == null)
+            {
+                throw new ArgumentNullException(nameof(messageProperties));
+            }
+
+            var missingProperties = MandatoryProperties
+                .Where(propertyToCheck => !messageProperties.ContainsKey(propertyToCheck)).ToList();
+            if (missingProperties.Any())
+            {
+                var exceptionMessage =
+                    $"Required properties '{string.Join(", ", missingProperties)}' are missing. Please provide these values and try again.";
+                throw new InvalidDataException(exceptionMessage);
             }
         }
 

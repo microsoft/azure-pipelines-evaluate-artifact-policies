@@ -16,7 +16,6 @@
         private readonly TaskProperties taskProperties;
         private TaskHttpClient taskClient;
         private VssConnection vssConnection;
-        private int? PlanVersion;
 
         public TaskClient(TaskProperties taskProperties)
         {

@@ -79,9 +79,9 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             }
             else
             {
-                string outputLog;
-                var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, request.PolicyData, null, request.Variables, out outputLog);
-                return new OkObjectResult(new EvaluationResponse { Violations = violations.ToList(), Logs = outputLog });
+                StringBuilder syncLogger = new StringBuilder();
+                var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, request.PolicyData, null, request.Variables, syncLogger, out string outputLog);
+                return new OkObjectResult(new EvaluationResponse { Violations = violations.ToList(), Logs = syncLogger.ToString() });
             }
         }
 
@@ -104,12 +104,12 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
 
                     // report task started
                     string taskStartedLog = string.Format("Initializing evaluation. Execution id - {0}", executionContext.InvocationId);
-                    Utilities.LogInformation(taskStartedLog, log, taskLogger, variables);
+                    Utilities.LogInformation(taskStartedLog, log, taskLogger, variables, null);
 
                     string outputLog;
-                    var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, policy, taskLogger, variables, out outputLog);
-                    bool succeeded = violations?.Any() == true;
-                    Utilities.LogInformation($"Policy check succeeded: {succeeded}", log, taskLogger, variables);
+                    var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, policy, taskLogger, variables, null, out outputLog);
+                    bool succeeded = !(violations?.Any() == true);
+                    Utilities.LogInformation($"Policy check succeeded: {succeeded}", log, taskLogger, variables, null);
 
                     await UpdateCheckSuiteResult(
                         taskProperties.PlanUrl,
@@ -154,7 +154,6 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             TaskLogger taskLogger,
             IDictionary<string, string> variables)
         {
-            string currentStatus;
             using (var httpClient = new HttpClient())
             {
                 string authTokenString = string.Format("{0}:{1}", "", authToken);
@@ -162,46 +161,25 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                 httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64AuthString);
 
                 HttpRetryHelper httpRetryHelper = new HttpRetryHelper(NumberOfHttpRetries);
-                string checkSuiteResult = null;
+
+                var checkSuiteUpdate = new Dictionary<string, dynamic>();
+                dynamic checkRunResult = new { status = succeeded ? "approved" : "rejected", resultMessage = message };
+                checkSuiteUpdate.Add(checkSuiteId.ToString(), checkRunResult);
+
                 try
                 {
-                    var checkRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}", accountUrl, projectId, checkSuiteId);
-                    Utilities.LogInformation(string.Format("Invoking {0} to get current check status", checkRunUrl), log, taskLogger, variables);
-                    var getResponse = await httpRetryHelper.Invoke(async () => await httpClient.GetAsync(checkRunUrl));
-                    checkSuiteResult = await getResponse.Content.ReadAsStringAsync();
-                    Utilities.LogInformation($"Check suite response: {checkSuiteResult}", log, taskLogger, variables);
+                    var updatedCheckSuiteBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(checkSuiteUpdate));
+                    var updatedCheckByteContent = new ByteArrayContent(updatedCheckSuiteBuffer);
+
+                    updatedCheckByteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                    var updateCheckRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?_api-version=5.0", accountUrl, projectId, checkSuiteId);
+                    Utilities.LogInformation(string.Format("Invoking {0} to post current check status", updateCheckRunUrl), log, taskLogger, variables, null);
+                    var updateCheckSuiteResponse = await httpRetryHelper.Invoke(async () => await httpClient.PostAsync(updateCheckRunUrl, updatedCheckByteContent));
                 }
                 catch (Exception e)
                 {
-                    await taskLogger?.Log($"Failed to fetch current check status with error message : {e.Message}");
-                    Utilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables);
-                }
-
-                dynamic checkSuite = JsonConvert.DeserializeObject(checkSuiteResult);
-                currentStatus = checkSuite?.status;
-
-                if (!string.IsNullOrWhiteSpace(currentStatus)
-                    && string.Compare(currentStatus, "running", StringComparison.OrdinalIgnoreCase) == 0)
-                {
-                    var checkSuiteUpdate = new Dictionary<string, dynamic>();
-                    dynamic checkRunResult = new { status = succeeded ? "approved" : "rejected", resultMessage = message };
-                    checkSuiteUpdate.Add(checkSuiteId.ToString(), checkRunResult);
-
-                    try
-                    {
-                        var updatedCheckSuiteBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(checkSuite));
-                        var updatedCheckByteContent = new ByteArrayContent(updatedCheckSuiteBuffer);
-
-                        updatedCheckByteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                        var updateCheckRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?_api-version=5.0", accountUrl, projectId, checkSuiteId);
-                        Utilities.LogInformation(string.Format("Invoking {0} to post current check status", updateCheckRunUrl), log, taskLogger, variables);
-                        var updateCheckSuiteResponse = await httpRetryHelper.Invoke(async () => await httpClient.PostAsync(updateCheckRunUrl, updatedCheckByteContent));
-                    }
-                    catch (Exception e)
-                    {
-                        await taskLogger?.Log($"Failed to fetch update check status with error message : {e.Message}");
-                        Utilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables);
-                    }
+                    await taskLogger?.Log($"Failed to fetch update check status with error message : {e.Message}");
+                    Utilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables, null);
                 }
             }
         }

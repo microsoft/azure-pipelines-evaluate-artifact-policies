@@ -39,6 +39,26 @@
         public Guid TimelineId { get; set; }
 
         [DataMember(EmitDefaultValue = false)]
-        public IDictionary<string,string> Variables { get; set; }
+        public IDictionary<string, string> Variables
+        {
+            get
+            {
+                return this.variables;
+            }
+            set
+            {
+                var incomingDictionary = value;
+                if (this.variables == null && incomingDictionary != null)
+                {
+                    this.variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var kvp in incomingDictionary)
+                    {
+                        this.variables.Add(kvp.Key, kvp.Value);
+                    }
+                }
+            }
+        }
+
+        private IDictionary<string, string> variables;
     }
 }

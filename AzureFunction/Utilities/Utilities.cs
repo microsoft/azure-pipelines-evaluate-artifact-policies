@@ -7,6 +7,7 @@
     using System.Globalization;
     using System.IO;
     using System.Linq;
+    using System.Text;
     using System.Text.RegularExpressions;
 
     using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models;
@@ -33,26 +34,23 @@
             string policy,
             TaskLogger taskLogger,
             IDictionary<string, string> variables,
+            StringBuilder syncLogger,
             out string outputLog)
         {
             string folderName = string.Format("Policy-{0}", executionContext.InvocationId.ToString("N"));
             string newFolderPath = Path.Combine(executionContext.FunctionDirectory, folderName);
 
-            log.LogInformation(string.Format("Folder created : {0}", newFolderPath));
-
-            Directory.CreateDirectory(newFolderPath);
-
             string imageProvenancePath = Path.Combine(newFolderPath, ImageProvenanceFileName);
             string policyFilePath = Path.Combine(newFolderPath, PolicyFileName);
 
             string packageName = Regex.Match(policy, @"package\s([a-zA-Z0-9.]+)", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1)).Groups?[1].Value;
-            Utilities.LogInformation(string.Format(CultureInfo.InvariantCulture, "Package name : {0}", packageName), log, taskLogger, variables);
+            Utilities.LogInformation(string.Format(CultureInfo.InvariantCulture, "Package name : {0}", packageName), log, taskLogger, variables, syncLogger);
 
 
             if (string.IsNullOrWhiteSpace(packageName))
             {
                 outputLog = "No package name could be inferred from the policy. Cannot continue execution. Ensure that policy contains a package name defined";
-                Utilities.LogInformation(outputLog, log, taskLogger, variables, true);
+                Utilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
 
                 return new List<string> { outputLog };
             }
@@ -61,13 +59,16 @@
 
             try
             {
+                Directory.CreateDirectory(newFolderPath);
+                log.LogInformation(string.Format("Folder created : {0}", newFolderPath), log, taskLogger, variables, syncLogger);
+
                 File.WriteAllText(imageProvenancePath, imageProvenance);
                 string formattedImageProvenance = IsDebugEnabled(variables) ? JValue.Parse(imageProvenance).ToString(Formatting.Indented) : imageProvenance;
-                Utilities.LogInformation("Image provenance file created", log, taskLogger, variables);
-                Utilities.LogInformation($"Image provenance : \r\n{formattedImageProvenance}", log, taskLogger, variables);
+                Utilities.LogInformation("Image provenance file created", log, taskLogger, variables, syncLogger);
+                Utilities.LogInformation($"Image provenance : \r\n{formattedImageProvenance}", log, taskLogger, variables, syncLogger);
                 File.WriteAllText(policyFilePath, policy);
-                Utilities.LogInformation("Policy content file created", log, taskLogger, variables);
-                Utilities.LogInformation($"Policy definitions : \r\n{policy}", log, taskLogger, variables);
+                Utilities.LogInformation("Policy content file created", log, taskLogger, variables, syncLogger);
+                Utilities.LogInformation($"Policy definitions : \r\n{policy}", log, taskLogger, variables, syncLogger);
 
                 // Add full explanation in case debug is set to true
                 var explainMode = IsDebugEnabled(variables) ? "full" : "notes";
@@ -83,7 +84,7 @@
                             OutputResultFileName,
                             explainMode);
 
-                Utilities.LogInformation($"Command line cmd: {arguments}", log, taskLogger, variables);
+                Utilities.LogInformation($"Command line cmd: {arguments}", log, taskLogger, variables, syncLogger);
 
                 var process = new Process
                 {
@@ -97,14 +98,14 @@
                     }
                 };
 
-                Utilities.LogInformation("Initiating evaluation", log, taskLogger, variables, true);
+                Utilities.LogInformation("Initiating evaluation", log, taskLogger, variables, syncLogger, true);
                 process.Start();
-                Utilities.LogInformation("Evaluation is in progress", log, taskLogger, variables, true);
+                Utilities.LogInformation("Evaluation is in progress", log, taskLogger, variables, syncLogger, true);
                 process.WaitForExit();
-                Utilities.LogInformation("Evaluation complete. Processing result", log, taskLogger, variables, true);
-                Utilities.LogInformation($"Completed executing OPA with exit code {process.ExitCode}", log, taskLogger, variables);
+                Utilities.LogInformation("Evaluation complete. Processing result", log, taskLogger, variables, syncLogger, true);
+                Utilities.LogInformation($"Completed executing with exit code {process.ExitCode}", log, taskLogger, variables, syncLogger);
 
-                output = File.ReadAllText(string.Format("{0}\\{1}", newFolderPath, OutputResultFileName));
+                output = File.ReadAllText(string.Format(CultureInfo.InvariantCulture, "{0}\\{1}", newFolderPath, OutputResultFileName));
                 log.LogInformation(output);
 
                 if (process.ExitCode != 0)
@@ -118,7 +119,7 @@
                 Directory.Delete(newFolderPath, true);
             }
 
-            return Utilities.GetViolationsFromResponse(log, taskLogger, output, variables, out outputLog);
+            return Utilities.GetViolationsFromResponse(log, taskLogger, output, variables, syncLogger, out outputLog);
         }
 
         public static IEnumerable<string> GetViolationsFromResponse(
@@ -126,6 +127,7 @@
         TaskLogger taskLogger,
         string output,
         IDictionary<string, string> variables,
+        StringBuilder syncLogger,
         out string outputLog)
         {
             IEnumerable<string> violations;
@@ -139,7 +141,7 @@
             }
 
             string outputValueString = outputValueIndex >= 0 ? output.Substring(outputValueIndex) : string.Empty;
-            Utilities.LogInformation($"Output of policy check : {outputValueString}", log, taskLogger, variables);
+            Utilities.LogInformation($"Output of policy check : {outputValueString}", log, taskLogger, variables, syncLogger);
 
             JArray outputArray = JsonConvert.DeserializeObject(outputValueString) as JArray;
             if (outputArray != null)
@@ -161,7 +163,7 @@
             // Get every line in the log to a new line, for better readability in the logs pane
             // Without this step, each line of the output won't go to a new line number
             outputLog = Regex.Replace(output, @"(?<=\S)\n", "\r\n");
-            Utilities.LogInformation(outputLog, log, taskLogger, variables, true);
+            Utilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
 
             return violations;
         }
@@ -171,7 +173,7 @@
             var taskPropertiesDictionary = new Dictionary<string, string>();
             taskPropertiesDictionary.Add(TaskProperties.AuthTokenKey, request.AuthToken);
             taskPropertiesDictionary.Add(TaskProperties.HubNameKey, request.HubName);
-            taskPropertiesDictionary.Add(TaskProperties.PlanUrlKey, request.PlanId.ToString());
+            taskPropertiesDictionary.Add(TaskProperties.PlanUrlKey, request.HostUrl.ToString());
             taskPropertiesDictionary.Add(TaskProperties.JobIdKey, request.JobId.ToString());
             taskPropertiesDictionary.Add(TaskProperties.PlanIdKey, request.PlanId.ToString());
             taskPropertiesDictionary.Add(TaskProperties.TimelineIdKey, request.TimelineId.ToString());
@@ -179,13 +181,13 @@
             return new TaskProperties(taskPropertiesDictionary);
         }
 
-        public static void LogInformation(string message, ILogger log, TaskLogger taskLogger, IDictionary<string, string> variables, bool alwaysLog = false)
+        public static void LogInformation(string message, ILogger log, TaskLogger taskLogger, IDictionary<string, string> variables, StringBuilder syncLogger, bool alwaysLog = false)
         {
-            if (taskLogger != null
-                && (alwaysLog
-                || IsDebugEnabled(variables)))
+            if (alwaysLog
+                || IsDebugEnabled(variables))
             {
-                taskLogger.Log(message).ConfigureAwait(false);
+                taskLogger?.Log(message).ConfigureAwait(false);
+                syncLogger?.AppendLine(message);
             }
 
             log.LogInformation(message);

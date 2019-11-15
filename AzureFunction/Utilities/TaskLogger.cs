@@ -12,7 +12,7 @@
 
     public class TaskLogger
     {
-        private const int RetryAttempts = 3
+        private const int RetryAttempts = 3;
         private readonly TaskProperties taskProperties;
 
         private int byteCount;
@@ -24,8 +24,8 @@
         private StreamWriter pageWriter;
         private readonly TaskClient taskClient;
 
-        // 8 MB
-        private const int PageSize = 8 * 1024 * 1024;
+        // 512 KB
+        private const int PageSize = 512 * 1024;
 
         public TaskLogger(TaskProperties taskProperties, TaskClient taskClient)
         {
