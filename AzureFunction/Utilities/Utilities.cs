@@ -43,7 +43,7 @@
             string imageProvenancePath = Path.Combine(newFolderPath, ImageProvenanceFileName);
             string policyFilePath = Path.Combine(newFolderPath, PolicyFileName);
 
-            string packageName = Regex.Match(policy, @"package\s([a-zA-Z0-9.]+)", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1)).Groups?[1].Value;
+            string packageName = Regex.Match(policy, @"package\s([a-zA-Z0-9.]+)", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(PackageRegexMatchTimeout)).Groups?[1].Value;
             Utilities.LogInformation(string.Format(CultureInfo.InvariantCulture, "Package name : {0}", packageName), log, taskLogger, variables, syncLogger);
 
 
@@ -70,21 +70,7 @@
                 Utilities.LogInformation("Policy content file created", log, taskLogger, variables, syncLogger);
                 Utilities.LogInformation($"Policy definitions : \r\n{policy}", log, taskLogger, variables, syncLogger);
 
-                // Add full explanation in case debug is set to true
-                var explainMode = IsDebugEnabled(variables) ? "full" : "notes";
-
-                // 2>&1 ensures standard error is directed to standard output
-                string arguments = string.Format(
-                            CultureInfo.InvariantCulture,
-                            "/c \"\"..\\opa_windows_amd64.exe\" eval -f pretty --explain {5} -i \"{0}\\{1}\" -d \"{0}\\{2}\" \"data.{3}.violations\" > \"{0}\\{4}\" 2>&1\"",
-                            folderName,
-                            ImageProvenanceFileName,
-                            PolicyFileName,
-                            packageName,
-                            OutputResultFileName,
-                            explainMode);
-
-                Utilities.LogInformation($"Command line cmd: {arguments}", log, taskLogger, variables, syncLogger);
+                string arguments = GetProcessArguments(log, taskLogger, variables, syncLogger, folderName, packageName);
 
                 var process = new Process
                 {
@@ -152,7 +138,7 @@
             {
                 if (output.IndexOf("undefined") == 0 || output.IndexOf("\nundefined") > 0)
                 {
-                    violations = new List<string> { "violations is not defined in the policy. Please defined a rule called violations" };
+                    violations = new List<string> { "violations is not defined in the policy. Please define a rule called violations" };
                 }
                 else
                 {
@@ -171,6 +157,7 @@
         public static TaskProperties CreateTaskProperties(EvaluationRequest request)
         {
             var taskPropertiesDictionary = new Dictionary<string, string>();
+            taskPropertiesDictionary.Add(TaskProperties.ProjectIdKey, request.ProjectId.ToString());
             taskPropertiesDictionary.Add(TaskProperties.AuthTokenKey, request.AuthToken);
             taskPropertiesDictionary.Add(TaskProperties.HubNameKey, request.HubName);
             taskPropertiesDictionary.Add(TaskProperties.PlanUrlKey, request.HostUrl.ToString());
@@ -193,7 +180,27 @@
             log.LogInformation(message);
         }
 
-        private static bool IsDebugEnabled(IDictionary<string, string> variables)
+        public static string GetProcessArguments(ILogger log, TaskLogger taskLogger, IDictionary<string, string> variables, StringBuilder syncLogger, string folderName, string packageName)
+        {
+            // Add full explanation in case debug is set to true
+            var explainMode = IsDebugEnabled(variables) ? "full" : "notes";
+
+            // 2>&1 ensures standard error is directed to standard output
+            string arguments = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "/c \"\"..\\opa_windows_amd64.exe\" eval -f pretty --explain {5} -i \"{0}\\{1}\" -d \"{0}\\{2}\" \"data.{3}.violations\" > \"{0}\\{4}\" 2>&1\"",
+                        folderName,
+                        ImageProvenanceFileName,
+                        PolicyFileName,
+                        packageName,
+                        OutputResultFileName,
+                        explainMode);
+
+            Utilities.LogInformation($"Command line cmd: {arguments}", log, taskLogger, variables, syncLogger);
+            return arguments;
+        }
+
+        public static bool IsDebugEnabled(IDictionary<string, string> variables)
         {
             if (variables == null)
             {
