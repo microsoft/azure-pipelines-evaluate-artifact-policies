@@ -16,7 +16,6 @@
         public Guid TaskInstanceId { get; set; }
         public string TaskInstanceName { get; }
         public string AuthToken { get; }
-        public RequestType RequestType { get; }
 
         private static readonly List<string> MandatoryProperties = new List<string>
         {
@@ -33,7 +32,6 @@
             HubNameKey,
             TaskInstanceIdKey,
             TaskInstanceNameKey,
-            RequestTypeKey,
         };
 
         public TaskProperties(IDictionary<string, string> messageProperties)
@@ -60,12 +58,6 @@
             this.PlanUrl = planUrl;
 
             this.AuthToken = messageProperties[AuthTokenKey];
-
-            var requestTypeString = messageProperties.ContainsKey(RequestTypeKey) ? messageProperties[RequestTypeKey] : RequestType.Execute.ToString();
-            if (Enum.TryParse<RequestType>(requestTypeString, out var requestType))
-            {
-                this.RequestType = requestType;
-            }
 
             if (messageProperties.ContainsKey(TaskInstanceNameKey))
             {
@@ -110,7 +102,6 @@
         public const string HubNameKey = "HubName";
         public const string PlanUrlKey = "PlanUrl";
         public const string AuthTokenKey = "AuthToken";
-        public const string RequestTypeKey = "RequestType";
         public const string TaskInstanceNameKey = "TaskInstanceName";
     }
 }

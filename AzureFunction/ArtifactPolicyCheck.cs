@@ -172,7 +172,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                     var updatedCheckByteContent = new ByteArrayContent(updatedCheckSuiteBuffer);
 
                     updatedCheckByteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                    var updateCheckRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?_api-version=5.0", accountUrl, projectId, checkSuiteId);
+                    var updateCheckRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?api-version=5.0", accountUrl, projectId, checkSuiteId);
                     Utilities.LogInformation(string.Format("Invoking {0} to post current check status", updateCheckRunUrl), log, taskLogger, variables, null);
                     var updateCheckSuiteResponse = await httpRetryHelper.Invoke(async () => await httpClient.PostAsync(updateCheckRunUrl, updatedCheckByteContent));
                 }
