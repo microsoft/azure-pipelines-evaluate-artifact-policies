@@ -1,0 +1,30 @@
+name: publish-evaluate-artifact-policies-$(SourceBranchName)_$(Date:MMMd)$(Rev:.r)
+
+jobs:
+- job: Build
+  timeoutInMinutes: 20
+  cancelTimeoutInMinutes: 2
+  pool:
+    name: Azure Pipelines
+    demands: msbuild
+
+  steps:
+    - task: MSBuild@1
+      displayName: 'Build dirs.proj'
+      inputs:
+        solution: dirs.proj
+        configuration: Release
+        clean: true
+
+    - task: ArchiveFiles@2
+      displayName: 'Archive azure function'
+      inputs:
+        rootFolderOrFile: AzureFunction/bin/Release/netstandard2.0/
+        includeRootFolder: false
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildNumber).zip'
+
+    - task: GitHubRelease@1
+      displayName: 'Create new github release'
+      inputs:
+        gitHubConnection: '$(gitHubConnectionName)'
+        assets: '$(Build.ArtifactStagingDirectory)/*.zip'
