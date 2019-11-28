@@ -5,4 +5,5 @@
     <ProjectFile Include="AzureFunction\dirs.proj" />
     <ProjectFile Include="Tests\dirs.proj" />
   </ItemGroup>
-</Project>
+  <Import Project="$(BuildPath)\Build.Traversal.targets" />
+ </Project>
