@@ -80,8 +80,17 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             else
             {
                 StringBuilder syncLogger = new StringBuilder();
-                var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, request.PolicyData, null, request.Variables, syncLogger, out string outputLog);
-                return new OkObjectResult(new EvaluationResponse { Violations = violations.ToList(), Logs = syncLogger.ToString() });
+                var violations = Utilities.ExecutePolicyCheck(
+                    executionContext,
+                    log,
+                    imageProvenance,
+                    request.PolicyData,
+                    null,
+                    request.Variables,
+                    syncLogger,
+                    out ViolationType violationType,
+                    out string outputLog);
+                return new OkObjectResult(new EvaluationResponse { Violations = violations.ToList(), Logs = syncLogger.ToString(), ViolationType = violationType });
             }
         }
 
@@ -107,7 +116,17 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                     Utilities.LogInformation(taskStartedLog, log, taskLogger, variables, null);
 
                     string outputLog;
-                    var violations = Utilities.ExecutePolicyCheck(executionContext, log, imageProvenance, policy, taskLogger, variables, null, out outputLog);
+                    var violations = Utilities.ExecutePolicyCheck(
+                        executionContext,
+                        log,
+                        imageProvenance,
+                        policy,
+                        taskLogger,
+                        variables,
+                        null,
+                        out ViolationType violationType,
+                        out outputLog);
+
                     bool succeeded = !(violations?.Any() == true);
                     Utilities.LogInformation($"Policy check succeeded: {succeeded}", log, taskLogger, variables, null);
 
