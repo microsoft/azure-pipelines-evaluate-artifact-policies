@@ -6,6 +6,7 @@ jobs:
   cancelTimeoutInMinutes: 2
   pool:
     name: Azure Pipelines
+    vmImage: vs2017-win2016    
     demands: msbuild
 
   steps:

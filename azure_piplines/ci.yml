@@ -6,10 +6,11 @@ jobs:
   cancelTimeoutInMinutes: 2
   pool:
     name: Azure Pipelines
+    vmImage: vs2017-win2016
     demands: msbuild
 
   steps:
     - template: './Templates/build_test.yml'
 
-    -${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
-      - template: './Templates/zip_publish_artifact'
+    - ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
+      - template: './Templates/zip_publish_artifact.yml'

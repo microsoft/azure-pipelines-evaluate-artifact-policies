@@ -19,7 +19,6 @@ steps:
       inputs:
         solution: dirs.proj
         configuration: '${{ parameters.configuration }}'
-        clean: true
 
     - task: VSTest@2
       displayName: 'Run unit tests'
