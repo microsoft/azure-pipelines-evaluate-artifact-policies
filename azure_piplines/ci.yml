@@ -1,0 +1,15 @@
+name: CI-evaluate-artifact-policies-$(SourceBranchName)_$(Date:MMMd)$(Rev:.r)
+
+jobs:
+- job: Build
+  timeoutInMinutes: 20
+  cancelTimeoutInMinutes: 2
+  pool:
+    name: Azure Pipelines
+    demands: msbuild
+
+  steps:
+    - template: './Templates/build_test.yml'
+
+    -${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
+      - template: './Templates/zip_publish_artifact'
