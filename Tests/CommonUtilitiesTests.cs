@@ -7,10 +7,11 @@
 
     using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models;
     using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Test.Mocks;
+    using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Utilities;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
 
     [TestClass]
-    public class UtilitiesTests
+    public class CommonUtilitiesTests
     {
         [TestInitialize]
         public void Initialize()
@@ -28,15 +29,15 @@
         public void IsDebugEnabledShouldReturnCorrectly()
         {
             var variables = new Dictionary<string, string>();
-            Assert.IsFalse(Utilities.IsDebugEnabled(null), "False for null variables");
-            Assert.IsFalse(Utilities.IsDebugEnabled(variables), "False for variables without system.debug");
+            Assert.IsFalse(CommonUtilities.IsDebugEnabled(null), "False for null variables");
+            Assert.IsFalse(CommonUtilities.IsDebugEnabled(variables), "False for variables without system.debug");
 
             variables["system.debug"] = "false";
-            Assert.IsFalse(Utilities.IsDebugEnabled(variables), "False for variables with system.debug set to false");
+            Assert.IsFalse(CommonUtilities.IsDebugEnabled(variables), "False for variables with system.debug set to false");
             variables["system.debug"] = string.Empty;
-            Assert.IsFalse(Utilities.IsDebugEnabled(variables), "False for variables with system.debug set to empty");
+            Assert.IsFalse(CommonUtilities.IsDebugEnabled(variables), "False for variables with system.debug set to empty");
             variables["system.debug"] = "true";
-            Assert.IsTrue(Utilities.IsDebugEnabled(variables), "True for variables with system.debug set to true");
+            Assert.IsTrue(CommonUtilities.IsDebugEnabled(variables), "True for variables with system.debug set to true");
         }
 
         [TestMethod]
@@ -49,10 +50,10 @@
 
             var variables = new Dictionary<string, string>();
             variables["system.debug"] = "false";
-            Assert.AreEqual(expectedOutputNotes, Utilities.GetProcessArguments(this.mockLogger, null, variables, null, folderName, packageName));
+            Assert.AreEqual(expectedOutputNotes, CommonUtilities.GetProcessArguments(this.mockLogger, null, variables, null, folderName, packageName));
 
             variables["system.debug"] = "true";
-            Assert.AreEqual(expectedOutputFull, Utilities.GetProcessArguments(this.mockLogger, null, variables, null, folderName, packageName));
+            Assert.AreEqual(expectedOutputFull, CommonUtilities.GetProcessArguments(this.mockLogger, null, variables, null, folderName, packageName));
         }
 
         [TestMethod]
@@ -69,7 +70,7 @@
                 AuthToken = "authToken1"
             };
 
-            var taskProperties = Utilities.CreateTaskProperties(request);
+            var taskProperties = CommonUtilities.CreateTaskProperties(request);
             Assert.AreEqual(request.ProjectId, taskProperties.ProjectId, "Project id should match");
             Assert.AreEqual(request.PlanId, taskProperties.PlanId, "Plan id should match");
             Assert.AreEqual(request.JobId, taskProperties.JobId, "Job id should match");
@@ -86,7 +87,7 @@
             string message = "Sample message";
             var variables = new Dictionary<string, string>();
             variables["system.debug"] = "false";
-            Utilities.LogInformation(message, this.mockLogger, null, variables, syncLogger);
+            CommonUtilities.LogInformation(message, this.mockLogger, null, variables, syncLogger);
 
             Assert.AreEqual(message, this.mockLogger.Logs, "Message should be logged in trace for system.debug false");
             Assert.AreEqual(string.Empty, syncLogger.ToString(), "Message should not be logged in task logs for system.debug false");
@@ -100,7 +101,7 @@
             var variables = new Dictionary<string, string>();
 
             variables["system.debug"] = "true";
-            Utilities.LogInformation(message, this.mockLogger, null, variables, syncLogger);
+            CommonUtilities.LogInformation(message, this.mockLogger, null, variables, syncLogger);
 
             Assert.AreEqual(message, this.mockLogger.Logs, "Message should be logged in trace for system.debug true");
             Assert.AreEqual(message + "\r\n", syncLogger.ToString(), "Message should be logged in task logs for system.debug true");
@@ -113,7 +114,7 @@
             string message = "Sample message";
             var variables = new Dictionary<string, string>();
             variables["system.debug"] = "false";
-            Utilities.LogInformation(message, this.mockLogger, null, variables, syncLogger, true);
+            CommonUtilities.LogInformation(message, this.mockLogger, null, variables, syncLogger, true);
 
             Assert.AreEqual(message, this.mockLogger.Logs, "Message should be logged in trace for system.debug false, always log true");
             Assert.AreEqual(message + "\r\n", syncLogger.ToString(), "Message should  be logged in task logs for system.debug false, always log true");
@@ -126,7 +127,7 @@
             var variables = new Dictionary<string, string>();
             variables["system.debug"] = "false";
             string output = "[\n   \"Failure message\"\n]";
-            var violations = Utilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out outputLog);
+            var violations = CommonUtilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out ViolationType violationType, out outputLog);
 
             Assert.AreEqual("[\r\n   \"Failure message\"\r\n]", outputLog);
             Assert.AreEqual(1, violations.Count());
@@ -140,14 +141,14 @@
             var variables = new Dictionary<string, string>();
             variables["system.debug"] = "false";
             string output = "undefined";
-            var violations = Utilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out outputLog);
+            var violations = CommonUtilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out ViolationType violationType, out outputLog);
 
             Assert.AreEqual("undefined", outputLog);
             Assert.AreEqual(1, violations.Count());
             Assert.AreEqual("violations is not defined in the policy. Please define a rule called violations", violations.ElementAt(0));
 
             output = "[Enter data.test.violations = _\n| Enter function1\n|| Enter function2\n||| Note \"trace 01\"]\nundefined";
-            violations = Utilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out outputLog);
+            violations = CommonUtilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out violationType, out outputLog);
 
             Assert.AreEqual("[Enter data.test.violations = _\r\n| Enter function1\r\n|| Enter function2\r\n||| Note \"trace 01\"]\r\nundefined", outputLog);
             Assert.AreEqual(1, violations.Count());
@@ -161,13 +162,13 @@
             var variables = new Dictionary<string, string>();
             variables["system.debug"] = "false";
             string output = "[]";
-            var violations = Utilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out outputLog);
+            var violations = CommonUtilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out ViolationType violationType, out outputLog);
 
             Assert.AreEqual("[]", outputLog);
             Assert.AreEqual(0, violations.Count());
 
             output = "[Enter data.test.violations = _\n| Enter function1\n|| Enter function2\n||| Note \"trace 01\"]\n[]";
-            violations = Utilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out outputLog);
+            violations = CommonUtilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out violationType, out outputLog);
 
             Assert.AreEqual("[Enter data.test.violations = _\r\n| Enter function1\r\n|| Enter function2\r\n||| Note \"trace 01\"]\r\n[]", outputLog);
             Assert.AreEqual(0, violations.Count());
@@ -181,7 +182,7 @@
             variables["system.debug"] = "false";
 
             string output = "[Enter data.test.violations = _\n| Enter function1\n|| Enter function2\n||| Note \"trace 01\"]\n[\n  \"Failure message\"\n]";
-            var violations = Utilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out outputLog);
+            var violations = CommonUtilities.GetViolationsFromResponse(this.mockLogger, null, output, variables, null, out ViolationType violationType, out outputLog);
 
             Assert.AreEqual("[Enter data.test.violations = _\r\n| Enter function1\r\n|| Enter function2\r\n||| Note \"trace 01\"]\r\n[\r\n  \"Failure message\"\r\n]", outputLog);
             Assert.AreEqual(1, violations.Count());

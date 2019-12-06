@@ -21,7 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Mocks\MockLogger.cs" />
-    <Compile Include="UtilitiesTests.cs" />
+    <Compile Include="CommonUtilitiesTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AzureFunction\Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.csproj">
