@@ -1,4 +1,15 @@
 name: CI-evaluate-artifact-policies-$(SourceBranchName)_$(Date:MMMd)$(Rev:.r)
+pr:
+    branches:
+      include:
+      - releases/*
+      - master
+    
+trigger:
+    branches:
+      include:
+      - releases/*
+      - master
 
 jobs:
 - job: Build

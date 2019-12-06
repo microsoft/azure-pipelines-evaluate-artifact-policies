@@ -1,5 +1,7 @@
 name: publish-evaluate-artifact-policies-$(SourceBranchName)_$(Date:MMMd)$(Rev:.r)
 
+trigger: none
+
 jobs:
 - job: Build
   timeoutInMinutes: 20
