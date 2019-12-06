@@ -29,7 +29,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
 
         [FunctionName("ArtifactPolicyCheck")]
         public async static Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)]HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)]HttpRequest req,
             ILogger log,
             WebJobsExecutionContext executionContext)
         {
