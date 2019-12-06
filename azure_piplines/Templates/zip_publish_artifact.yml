@@ -1,0 +1,16 @@
+# Zip azure function content
+parameters:
+  configuration: 'Release'
+
+steps:
+    - task: ArchiveFiles@2
+      displayName: 'Archive azure function'
+      inputs:
+        rootFolderOrFile: 'AzureFunction/bin/${{ parameters.configuration }}/netstandard2.0/'
+        includeRootFolder: false
+        archiveFile: '$(Build.ArtifactStagingDirectory)/ArtifactPolicyCheck_$(Build.SourceBranchName)_$(Build.BuildId).zip'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifact: ArtifactPolicy_Zip'
+      inputs:
+        ArtifactName: 'ArtifactPolicy_Zip'

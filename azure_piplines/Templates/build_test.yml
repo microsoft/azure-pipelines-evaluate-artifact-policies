@@ -1,0 +1,26 @@
+# Restore nuget packages, build and run L0 tests
+parameters:
+  configuration: 'Release'
+
+steps:
+    - task: NuGetToolInstaller@1
+      displayName: 'Install NuGet 4.3.0'
+      inputs:
+        versionSpec: 4.3.0
+        checkLatest: true
+
+    - task: NuGetCommand@2
+      displayName: 'Run NuGet restore on all csproj'
+      inputs:
+        restoreSolution: '**/*.csproj'
+    
+    - task: MSBuild@1
+      displayName: 'Build dirs.proj'
+      inputs:
+        solution: dirs.proj
+        configuration: '${{ parameters.configuration }}'
+
+    - task: VSTest@2
+      displayName: 'Run unit tests'
+      inputs:
+        testAssemblyVer2: 'Tests/bin/${{ parameters.configuration }}/**/*.dll'
