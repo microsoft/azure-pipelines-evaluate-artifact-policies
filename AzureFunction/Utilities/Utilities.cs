@@ -35,6 +35,7 @@
             TaskLogger taskLogger,
             IDictionary<string, string> variables,
             StringBuilder syncLogger,
+            out ViolationType violationType,
             out string outputLog)
         {
             string folderName = string.Format("Policy-{0}", executionContext.InvocationId.ToString("N"));
@@ -52,6 +53,7 @@
                 outputLog = "No package name could be inferred from the policy. Cannot continue execution. Ensure that policy contains a package name defined";
                 Utilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
 
+                violationType = ViolationType.PackageNotDefined;
                 return new List<string> { outputLog };
             }
 
@@ -97,6 +99,7 @@
                 if (process.ExitCode != 0)
                 {
                     outputLog = output;
+                    violationType = ViolationType.OPAExecutionError;
                     return new List<string> { $"Policy run had issues: {output}" };
                 }
             }
@@ -105,7 +108,7 @@
                 Directory.Delete(newFolderPath, true);
             }
 
-            return Utilities.GetViolationsFromResponse(log, taskLogger, output, variables, syncLogger, out outputLog);
+            return Utilities.GetViolationsFromResponse(log, taskLogger, output, variables, syncLogger, out violationType, out outputLog);
         }
 
         public static IEnumerable<string> GetViolationsFromResponse(
@@ -114,6 +117,7 @@
         string output,
         IDictionary<string, string> variables,
         StringBuilder syncLogger,
+        out ViolationType violationType,
         out string outputLog)
         {
             IEnumerable<string> violations;
@@ -133,15 +137,18 @@
             if (outputArray != null)
             {
                 violations = outputArray.Values().Select(val => val.ToString(Formatting.Indented)).ToList();
+                violationType = violations.Any() ? ViolationType.ViolationsListNotEmpty : ViolationType.None;
             }
             else
             {
                 if (output.IndexOf("undefined") == 0 || output.IndexOf("\nundefined") > 0)
                 {
+                    violationType = ViolationType.ViolationsNotDefined;
                     violations = new List<string> { "violations is not defined in the policy. Please define a rule called violations" };
                 }
                 else
                 {
+                    violationType = ViolationType.None;
                     violations = new List<string>();
                 }
             }

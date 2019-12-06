@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Runtime.Serialization;
-using System.Text;
-
-namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models
+﻿namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models
 {
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Converters;
+    using System.Collections.Generic;
+    using System.Runtime.Serialization;
+
     [DataContract]
     public class EvaluationResponse
     {
@@ -14,5 +13,9 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models
 
         [DataMember(Name = "logs")]
         public string Logs { get; set; }
+
+        [DataMember(Name = "violationType")]
+        [JsonConverter(typeof(StringEnumConverter), true)]
+        public ViolationType ViolationType { get; set; }
     }
 }
