@@ -1,4 +1,4 @@
-﻿namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
+﻿namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Utilities
 {
     using System;
     using System.Collections.Generic;

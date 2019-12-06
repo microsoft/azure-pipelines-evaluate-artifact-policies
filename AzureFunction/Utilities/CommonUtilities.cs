@@ -1,4 +1,4 @@
-﻿namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
+﻿namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Utilities
 {
     using System;
     using System.Collections;
@@ -18,7 +18,7 @@
 
     using WebJobsExecutionContext = WebJobs.ExecutionContext;
 
-    public static class Utilities
+    public static class CommonUtilities
     {
         private const string ImageProvenanceFileName = "ImageProvenance.json";
         private const string PolicyFileName = "Policies.rego";
@@ -45,13 +45,13 @@
             string policyFilePath = Path.Combine(newFolderPath, PolicyFileName);
 
             string packageName = Regex.Match(policy, @"package\s([a-zA-Z0-9.]+)", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(PackageRegexMatchTimeout)).Groups?[1].Value;
-            Utilities.LogInformation(string.Format(CultureInfo.InvariantCulture, "Package name : {0}", packageName), log, taskLogger, variables, syncLogger);
+            CommonUtilities.LogInformation(string.Format(CultureInfo.InvariantCulture, "Package name : {0}", packageName), log, taskLogger, variables, syncLogger);
 
 
             if (string.IsNullOrWhiteSpace(packageName))
             {
                 outputLog = "No package name could be inferred from the policy. Cannot continue execution. Ensure that policy contains a package name defined";
-                Utilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
+                CommonUtilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
 
                 violationType = ViolationType.PackageNotDefined;
                 return new List<string> { outputLog };
@@ -66,11 +66,11 @@
 
                 File.WriteAllText(imageProvenancePath, imageProvenance);
                 string formattedImageProvenance = IsDebugEnabled(variables) ? JValue.Parse(imageProvenance).ToString(Formatting.Indented) : imageProvenance;
-                Utilities.LogInformation("Image provenance file created", log, taskLogger, variables, syncLogger);
-                Utilities.LogInformation($"Image provenance : \r\n{formattedImageProvenance}", log, taskLogger, variables, syncLogger);
+                CommonUtilities.LogInformation("Image provenance file created", log, taskLogger, variables, syncLogger);
+                CommonUtilities.LogInformation($"Image provenance : \r\n{formattedImageProvenance}", log, taskLogger, variables, syncLogger);
                 File.WriteAllText(policyFilePath, policy);
-                Utilities.LogInformation("Policy content file created", log, taskLogger, variables, syncLogger);
-                Utilities.LogInformation($"Policy definitions : \r\n{policy}", log, taskLogger, variables, syncLogger);
+                CommonUtilities.LogInformation("Policy content file created", log, taskLogger, variables, syncLogger);
+                CommonUtilities.LogInformation($"Policy definitions : \r\n{policy}", log, taskLogger, variables, syncLogger);
 
                 string arguments = GetProcessArguments(log, taskLogger, variables, syncLogger, folderName, packageName);
 
@@ -86,12 +86,12 @@
                     }
                 };
 
-                Utilities.LogInformation("Initiating evaluation", log, taskLogger, variables, syncLogger, true);
+                CommonUtilities.LogInformation("Initiating evaluation", log, taskLogger, variables, syncLogger, true);
                 process.Start();
-                Utilities.LogInformation("Evaluation is in progress", log, taskLogger, variables, syncLogger, true);
+                CommonUtilities.LogInformation("Evaluation is in progress", log, taskLogger, variables, syncLogger, true);
                 process.WaitForExit();
-                Utilities.LogInformation("Evaluation complete. Processing result", log, taskLogger, variables, syncLogger, true);
-                Utilities.LogInformation($"Completed executing with exit code {process.ExitCode}", log, taskLogger, variables, syncLogger);
+                CommonUtilities.LogInformation("Evaluation complete. Processing result", log, taskLogger, variables, syncLogger, true);
+                CommonUtilities.LogInformation($"Completed executing with exit code {process.ExitCode}", log, taskLogger, variables, syncLogger);
 
                 output = File.ReadAllText(string.Format(CultureInfo.InvariantCulture, "{0}\\{1}", newFolderPath, OutputResultFileName));
                 log.LogInformation(output);
@@ -99,7 +99,7 @@
                 if (process.ExitCode != 0)
                 {
                     outputLog = output;
-                    violationType = ViolationType.OPAExecutionError;
+                    violationType = ViolationType.PolicyExecutionError;
                     return new List<string> { $"Policy run had issues: {output}" };
                 }
             }
@@ -108,7 +108,7 @@
                 Directory.Delete(newFolderPath, true);
             }
 
-            return Utilities.GetViolationsFromResponse(log, taskLogger, output, variables, syncLogger, out violationType, out outputLog);
+            return CommonUtilities.GetViolationsFromResponse(log, taskLogger, output, variables, syncLogger, out violationType, out outputLog);
         }
 
         public static IEnumerable<string> GetViolationsFromResponse(
@@ -131,7 +131,7 @@
             }
 
             string outputValueString = outputValueIndex >= 0 ? output.Substring(outputValueIndex) : string.Empty;
-            Utilities.LogInformation($"Output of policy check : {outputValueString}", log, taskLogger, variables, syncLogger);
+            CommonUtilities.LogInformation($"Output of policy check : {outputValueString}", log, taskLogger, variables, syncLogger);
 
             JArray outputArray = JsonConvert.DeserializeObject(outputValueString) as JArray;
             if (outputArray != null)
@@ -156,7 +156,7 @@
             // Get every line in the log to a new line, for better readability in the logs pane
             // Without this step, each line of the output won't go to a new line number
             outputLog = Regex.Replace(output, @"(?<=\S)\n", "\r\n");
-            Utilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
+            CommonUtilities.LogInformation(outputLog, log, taskLogger, variables, syncLogger, true);
 
             return violations;
         }
@@ -203,7 +203,7 @@
                         OutputResultFileName,
                         explainMode);
 
-            Utilities.LogInformation($"Command line cmd: {arguments}", log, taskLogger, variables, syncLogger);
+            CommonUtilities.LogInformation($"Command line cmd: {arguments}", log, taskLogger, variables, syncLogger);
             return arguments;
         }
 

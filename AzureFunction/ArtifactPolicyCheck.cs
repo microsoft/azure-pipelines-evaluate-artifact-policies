@@ -15,6 +15,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Models;
     using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Request;
+    using Microsoft.Azure.Pipelines.EvaluateArtifactPolicies.Utilities;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.Http;
     using Microsoft.Extensions.Logging;
@@ -26,6 +27,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
     public static class ArtifactPolicyCheck
     {
         private const int NumberOfHttpRetries = 5;
+        private const string ArtifactPolicyTelemetryReasonKey = "reason";
 
         [FunctionName("ArtifactPolicyCheck")]
         public async static Task<IActionResult> Run(
@@ -66,7 +68,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
 
             if (!string.IsNullOrWhiteSpace(request.AuthToken))
             {
-                TaskProperties taskProperties = Utilities.CreateTaskProperties(request);
+                TaskProperties taskProperties = CommonUtilities.CreateTaskProperties(request);
                 new Thread(async () => await ExecuteUsingTimelineLogs(
                   executionContext,
                   log,
@@ -80,7 +82,7 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
             else
             {
                 StringBuilder syncLogger = new StringBuilder();
-                var violations = Utilities.ExecutePolicyCheck(
+                var violations = CommonUtilities.ExecutePolicyCheck(
                     executionContext,
                     log,
                     imageProvenance,
@@ -113,10 +115,10 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
 
                     // report task started
                     string taskStartedLog = string.Format("Initializing evaluation. Execution id - {0}", executionContext.InvocationId);
-                    Utilities.LogInformation(taskStartedLog, log, taskLogger, variables, null);
+                    CommonUtilities.LogInformation(taskStartedLog, log, taskLogger, variables, null);
 
                     string outputLog;
-                    var violations = Utilities.ExecutePolicyCheck(
+                    var violations = CommonUtilities.ExecutePolicyCheck(
                         executionContext,
                         log,
                         imageProvenance,
@@ -128,7 +130,15 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                         out outputLog);
 
                     bool succeeded = !(violations?.Any() == true);
-                    Utilities.LogInformation($"Policy check succeeded: {succeeded}", log, taskLogger, variables, null);
+                    CommonUtilities.LogInformation($"Policy check succeeded: {succeeded}", log, taskLogger, variables, null);
+
+                    var telemetryProperties = new Dictionary<string, object>();
+                    telemetryProperties.Add("projectId", taskProperties.ProjectId);
+                    telemetryProperties.Add("jobId", taskProperties.JobId);
+                    telemetryProperties.Add("checkSuiteId", checkSuiteId);
+                    telemetryProperties.Add("result", succeeded ? "succeeded" : "failed");
+                    telemetryProperties.Add("layer", "Azure function");
+                    telemetryProperties.Add(ArtifactPolicyTelemetryReasonKey, $"Found violations in evaluation. Violation type: {violationType}");
 
                     await UpdateCheckSuiteResult(
                         taskProperties.PlanUrl,
@@ -140,6 +150,9 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
                         log,
                         taskLogger,
                         variables);
+
+                    await CustomerIntelligenceClient.GetClient(taskProperties.PlanUrl, taskProperties.AuthToken)
+                        .PublishArtifactPolicyEventAsync(telemetryProperties).ConfigureAwait(false);
 
                     return;
                 }
@@ -192,13 +205,13 @@ namespace Microsoft.Azure.Pipelines.EvaluateArtifactPolicies
 
                     updatedCheckByteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
                     var updateCheckRunUrl = string.Format("{0}/{1}/_apis/pipelines/checks/runs/{2}?api-version=5.0", accountUrl, projectId, checkSuiteId);
-                    Utilities.LogInformation(string.Format("Invoking {0} to post current check status", updateCheckRunUrl), log, taskLogger, variables, null);
+                    CommonUtilities.LogInformation(string.Format("Invoking {0} to post current check status", updateCheckRunUrl), log, taskLogger, variables, null);
                     var updateCheckSuiteResponse = await httpRetryHelper.Invoke(async () => await httpClient.PostAsync(updateCheckRunUrl, updatedCheckByteContent));
                 }
                 catch (Exception e)
                 {
                     await taskLogger?.Log($"Failed to fetch update check status with error message : {e.Message}");
-                    Utilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables, null);
+                    CommonUtilities.LogInformation($"Error stack: {e.ToString()}", log, taskLogger, variables, null);
                 }
             }
         }
